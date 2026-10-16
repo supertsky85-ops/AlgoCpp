@@ -1,0 +1,2 @@
+PASS: F5 compile/run output 8 is visible after switching from Errors tab
+PASS: F5 resumes paused debug session, result 8 is visible at exit

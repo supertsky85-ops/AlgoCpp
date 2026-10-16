@@ -1,0 +1,6 @@
+PAUSE: 已暂停 · breakpoint-hit · main · C:\Users\DELL\AppData\Local\Temp\algocpp_debug_uw8q9trb\main.cpp:7
+BREAKPOINT + LOCALS OK
+STEP IN OK
+STEP OUT + NEXT OK
+PROGRAM OUTPUT OK
+PASS: diagnostics, stale marker clearing, breakpoint, stdin, locals, step-in/out/next, continue, output, stop

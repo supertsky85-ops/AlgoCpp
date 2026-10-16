@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "mode": "忽略空白",
+  "timeout": "5",
+  "cases": [
+    {"name": "样例 1", "input": "3 5\n", "expected": "8\n"},
+    {"name": "样例 2", "input": "-2 7\n", "expected": "5\n"}
+  ]
+}

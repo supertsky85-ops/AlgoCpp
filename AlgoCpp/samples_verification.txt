@@ -1,0 +1,6 @@
+PASS: compile-once suite AC / WA / RE / TLE / OLE / whitespace, diff and exit code
+PASS: strict comparison catches missing final newline
+PASS: compilation errors mark source and all cases CE
+PASS: stop cancels current case and skips remaining cases
+PASS: case edits and JSON save/import round trip
+ALL SAMPLE TESTS PASSED at C:\Users\DELL\Documents\Codex\2026-10-16\xi\outputs\AlgoCpp

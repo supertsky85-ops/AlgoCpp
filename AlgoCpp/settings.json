@@ -1,0 +1,5 @@
+{
+  "compiler": "toolchain\\mingw64\\bin\\g++.exe",
+  "standard": "c++17",
+  "gdb": "toolchain\\mingw64\\bin\\gdb.exe"
+}
