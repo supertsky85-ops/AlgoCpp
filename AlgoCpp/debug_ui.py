@@ -41,7 +41,7 @@ class DebugFeatures:
         book.add(errors_tab, text='错误 / 警告')
         book.add(debug_tab, text='调试：局部变量 / 调用栈')
         self.output_book, self.output_tab = book, out_tab
-        self.output = tk.Text(out_tab, height=10, font=('Consolas', 11), wrap='word', state='disabled')
+        self.output = tk.Text(out_tab, height=10, font=self.io_font, wrap='word', state='disabled')
         self.output.pack(fill='both', expand=True)
         self.output.bind('<Double-Button-1>', self.goto_error)
         self.diagnostics = ttk.Treeview(errors_tab, columns=('kind', 'line', 'message'), show='headings', height=6)
@@ -56,17 +56,18 @@ class DebugFeatures:
         self.locals_view.column('name', width=140)
         self.locals_view.column('value', width=350)
         self.locals_view.pack(fill='both', expand=True)
-        self.stack_view = tk.Listbox(debug_tab, height=3, font=('Consolas', 10))
+        self.stack_view = tk.Listbox(debug_tab, height=3, font=self.small_font)
         self.stack_view.pack(fill='x')
         row = ttk.Frame(self.root, padding=(8, 3))
-        row.pack(before=self.status_label, fill='x')
+        row.pack(side='bottom', fill='x')
         self.debug_buttons = {}
         for label, action in [('开始调试 F6', self.start_debug), ('断点 F9', self.toggle_breakpoint), ('继续 F8', lambda: self.debug_command('-exec-continue')), ('逐过程 F10', lambda: self.debug_command('-exec-next')), ('进入 F11', lambda: self.debug_command('-exec-step')), ('跳出 Shift+F11', lambda: self.debug_command('-exec-finish')), ('设置 GDB', self.set_gdb), ('样例测试 Ctrl+Enter', lambda: open_samples(self))]:
             button = ttk.Button(row, text=label, command=action)
             button.pack(side='left', padx=2)
             self.debug_buttons[label] = button
+        self.wrap_toolbar(row)
         self.debug_status = tk.StringVar(value='调试就绪 · 点击行号设断点；黄色行表示下一条将执行的语句')
-        ttk.Label(self.root, textvariable=self.debug_status, padding=(8, 2)).pack(before=self.status_label, fill='x')
+        ttk.Label(self.root, textvariable=self.debug_status, padding=(8, 2)).pack(side='bottom', fill='x')
         self.numbers.bind('<Button-1>', self.gutter_breakpoint)
         self.root.bind('<F6>', lambda e: self.start_debug())
         self.root.bind('<F8>', lambda e: self.debug_command('-exec-continue'))

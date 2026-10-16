@@ -1,5 +1,7 @@
 {
   "compiler": "toolchain\\mingw64\\bin\\g++.exe",
   "standard": "c++17",
-  "gdb": "toolchain\\mingw64\\bin\\gdb.exe"
+  "gdb": "toolchain\\mingw64\\bin\\gdb.exe",
+  "font_size": 16,
+  "always_on_top": false
 }

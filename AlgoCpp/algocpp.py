@@ -10,6 +10,10 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from debug_ui import DebugFeatures
 from samples import open_samples
+from editor_features import EditorFeatures
+from display_features import DisplayFeatures, enable_high_dpi
+
+enable_high_dpi()
 
 HOME = Path(__file__).resolve().parent
 CONFIG = HOME / 'settings.json'
@@ -40,7 +44,7 @@ SNIPPETS = {
 }
 
 
-class App(DebugFeatures):
+class App(DisplayFeatures, EditorFeatures, DebugFeatures):
     def __init__(self, root):
         self.root = root
         self.path = None
@@ -65,8 +69,7 @@ class App(DebugFeatures):
                 if not self.compiler and Path(candidate).is_file():
                     self.compiler = candidate
         root.title('AlgoCpp · 本地 C++ 算法练习')
-        root.geometry('1200x820')
-        root.minsize(850, 600)
+        self.setup_display()
         bar = ttk.Frame(root, padding=8)
         bar.pack(fill='x')
         for label, action in [('新建', self.new), ('打开', self.open), ('保存 Ctrl+S', self.save), ('编译 F7', lambda: self.build(False)), ('运行 F5', self.run_or_continue), ('停止', self.stop), ('设置编译器', self.settings)]:
@@ -74,44 +77,67 @@ class App(DebugFeatures):
         self.standard = tk.StringVar(value=self.config.get('standard', 'c++17'))
         ttk.Combobox(bar, textvariable=self.standard, values=['c++11', 'c++14', 'c++17', 'c++20', 'c++23'], state='readonly', width=8).pack(side='right')
         ttk.Label(bar, text='补全 Ctrl+Space / Tab    ').pack(side='right')
-        panes = ttk.Panedwindow(root, orient='vertical')
+        self.wrap_toolbar(bar)
+        editbar = ttk.Frame(root, padding=(8, 0, 8, 5))
+        editbar.pack(fill='x')
+        for label, action in [('撤销 Ctrl+Z', self.undo_edit), ('回退 Ctrl+Y', self.redo_edit), ('格式化 Ctrl+Shift+F', self.format_code)]:
+            ttk.Button(editbar, text=label, command=action).pack(side='left', padx=3)
+        ttk.Button(editbar, text='A−', width=3, command=lambda: self.zoom_font(-1)).pack(side='left', padx=(12, 2))
+        ttk.Label(editbar, textvariable=self.zoom_label, width=5, anchor='center').pack(side='left')
+        ttk.Button(editbar, text='A+', width=3, command=lambda: self.zoom_font(1)).pack(side='left', padx=2)
+        ttk.Button(editbar, text='最大化 / 还原', command=self.toggle_maximize).pack(side='left', padx=8)
+        ttk.Button(editbar, textvariable=self.topmost_label, command=self.toggle_topmost).pack(side='left', padx=3)
+        self.wrap_toolbar(editbar)
+        panes = tk.PanedWindow(root, orient='vertical', sashwidth=5, showhandle=False,
+                               sashrelief='flat', bg='#d9dde3', borderwidth=0, opaqueresize=True)
+        self.main_panes = panes
         panes.pack(fill='both', expand=True, padx=8)
         editframe = ttk.Frame(panes)
-        panes.add(editframe, weight=3)
+        panes.add(editframe, minsize=120, height=340, stretch='always')
+        self.gutter_width = 53
         self.numbers = tk.Canvas(editframe, width=53, bg='#202430', highlightthickness=0)
         self.numbers.pack(side='left', fill='y')
-        self.editor = tk.Text(editframe, undo=True, wrap='none', font=('Consolas', 13), bg='#171b24', fg='#dbe4f0', insertbackground='white', selectbackground='#384f70', padx=10, pady=8, tabs=('4c',))
+        self.editor = tk.Text(editframe, undo=True, wrap='none', font=self.code_font, bg='#171b24', fg='#dbe4f0', insertbackground='white', selectbackground='#384f70', padx=10, pady=8, tabs=('4c',))
         scroll = ttk.Scrollbar(editframe, command=self.scroll)
         scroll.pack(side='right', fill='y')
         self.editor.pack(fill='both', expand=True)
         self.editor.configure(yscrollcommand=lambda a, b: (scroll.set(a, b), self.lines()))
-        bottom = ttk.Panedwindow(panes, orient='horizontal')
-        panes.add(bottom, weight=1)
+        bottom = tk.PanedWindow(panes, orient='horizontal', sashwidth=5, showhandle=False,
+                                sashrelief='flat', bg='#d9dde3', borderwidth=0, opaqueresize=True)
+        self.io_panes = bottom
+        panes.add(bottom, minsize=100, height=180, stretch='always')
         left, right = ttk.Frame(bottom), ttk.Frame(bottom)
-        bottom.add(left, weight=1)
-        bottom.add(right, weight=2)
+        bottom.add(left, minsize=100, width=320, stretch='always')
+        bottom.add(right, minsize=150, width=640, stretch='always')
         ttk.Label(left, text='标准输入 stdin（运行前填好）').pack(anchor='w')
-        self.stdin = tk.Text(left, height=10, font=('Consolas', 11), wrap='none')
+        self.stdin = tk.Text(left, height=6, width=24, font=self.io_font, wrap='none')
         self.stdin.pack(fill='both', expand=True)
         self.stdin.insert('1.0', '3 5\n')
         ttk.Label(right, text='编译信息 / 标准输出（双击错误行定位）').pack(anchor='w')
-        self.output = tk.Text(right, height=10, font=('Consolas', 11), wrap='word', state='disabled')
+        self.output = tk.Text(right, height=10, font=self.io_font, wrap='word', state='disabled')
         self.output.pack(fill='both', expand=True)
         self.output.bind('<Double-Button-1>', self.goto_error)
         self.status = tk.StringVar()
         self.status_label = ttk.Label(root, textvariable=self.status, padding=5)
-        self.status_label.pack(fill='x')
+        self.status_label.pack(side='bottom', fill='x')
         self.setup_debug(right)
         for tag, color in [('keyword', '#c792ea'), ('string', '#c3e88d'), ('comment', '#718096'), ('number', '#f78c6c'), ('stl', '#82aaff')]:
             self.editor.tag_configure(tag, foreground=color)
+        self.setup_editor_features()
+        # Reserve toolbars/status first; let the central panes use the rest.
+        panes.pack_forget()
+        panes.pack(fill='both', expand=True, padx=8)
+        self.update_gutter_width()
+        for widget in (self.editor, self.stdin, self.output, self.stack_view):
+            self.bind_zoom(widget)
         self.editor.bind('<KeyPress>', self.key)
         self.editor.bind('<KeyRelease>', self.changed)
-        self.editor.bind('<ButtonRelease-1>', self.changed)
+        self.editor.bind('<ButtonRelease-1>', self.selection_release)
         self.editor.bind('<Control-space>', self.complete)
         self.editor.bind('<Tab>', self.tab)
         self.editor.bind('<Return>', self.enter)
         self.editor.bind('<BackSpace>', self.backspace)
-        self.editor.bind('<Escape>', lambda e: self.hide_popup())
+        self.editor.bind('<Escape>', self.escape_editor)
         self.editor.bind('<Down>', lambda e: self.popup_move(1))
         self.editor.bind('<Up>', lambda e: self.popup_move(-1))
         root.bind('<Control-s>', lambda e: self.save())
@@ -137,13 +163,14 @@ class App(DebugFeatures):
             info = self.editor.dlineinfo(index)
             if not info:
                 break
-            self.numbers.create_text(43, info[1] + info[3] / 2, text=index.split('.')[0], fill='#778399', anchor='e', font=('Consolas', 11))
+            self.numbers.create_text(self.gutter_width-10, info[1] + info[3] / 2, text=index.split('.')[0], fill='#778399', anchor='e', font=self.small_font)
             if hasattr(self, 'breakpoints') and int(index.split('.')[0]) in self.breakpoint_lines():
                 y = info[1] + info[3] / 2
                 self.numbers.create_oval(3, y-5, 13, y+5, fill='#f05b66', outline='')
             index = self.editor.index(index + '+1line')
 
     def changed(self, event=None):
+        self.update_brackets()
         if hasattr(self, 'timer'):
             self.root.after_cancel(self.timer)
         self.timer = self.root.after(130, self.highlight)
@@ -165,56 +192,10 @@ class App(DebugFeatures):
             tag = 'comment' if s.startswith(('//', '/*')) else 'string' if s[0] in '\"\x27' else 'number' if s[0].isdigit() else 'keyword' if s in WORDS[:WORDS.index('std')] else 'stl' if s in WORDS else None
             if tag:
                 self.editor.tag_add(tag, f'1.0+{m.start()}c', f'1.0+{m.end()}c')
+        self.update_brackets()
         self.lines()
         pos = self.editor.index('insert')
         self.status.set(f'{self.path or "未命名.cpp"}    行列 {pos}    编译器：{self.compiler or "未配置，请选择 g++.exe 或 clang++.exe"}')
-
-    def key(self, event):
-        if event.state & 4:
-            return
-        pairs = {'(': ')', '[': ']', '{': '}', '"': '"', "'": "'"}
-        ch = event.char
-        if ch and ch in ')]}\"\x27' and self.editor.get('insert', 'insert+1c') == ch:
-            self.editor.mark_set('insert', 'insert+1c')
-            return 'break'
-        if ch in pairs:
-            selected = self.editor.tag_ranges('sel')
-            if selected:
-                text = self.editor.get(*selected)
-                self.editor.delete(*selected)
-                self.editor.insert('insert', ch + text + pairs[ch])
-            else:
-                self.editor.insert('insert', ch + pairs[ch])
-                self.editor.mark_set('insert', 'insert-1c')
-            return 'break'
-
-    def backspace(self, event):
-        if not self.editor.tag_ranges('sel') and self.editor.get('insert-1c', 'insert+1c') in ('()', '[]', '{}', '""', "''"):
-            self.editor.delete('insert-1c', 'insert+1c')
-            return 'break'
-
-    def enter(self, event):
-        if self.popup:
-            self.accept()
-            return 'break'
-        before = self.editor.get('insert linestart', 'insert')
-        indent = re.match(r'\s*', before).group()
-        if before.rstrip().endswith('{'):
-            if self.editor.get('insert', 'insert+1c') == '}':
-                self.editor.insert('insert', '\n' + indent + '    ' + '\n' + indent)
-                self.editor.mark_set('insert', 'insert-1line lineend')
-            else:
-                self.editor.insert('insert', '\n' + indent + '    ')
-        else:
-            self.editor.insert('insert', '\n' + indent)
-        return 'break'
-
-    def tab(self, event):
-        if self.popup:
-            self.accept()
-        else:
-            self.editor.insert('insert', '    ')
-        return 'break'
 
     def hide_popup(self):
         if self.popup:
@@ -242,8 +223,9 @@ class App(DebugFeatures):
         self.popup.overrideredirect(True)
         x, y, w, h = box
         self.popup.geometry(f'+{self.editor.winfo_rootx()+x}+{self.editor.winfo_rooty()+y+h}')
-        self.choices = tk.Listbox(self.popup, height=min(8, len(matches)), width=35, font=('Consolas', 11), exportselection=False)
+        self.choices = tk.Listbox(self.popup, height=min(8, len(matches)), width=35, font=self.io_font, exportselection=False)
         self.choices.pack()
+        self.bind_zoom(self.choices)
         for word in matches:
             self.choices.insert('end', word)
         self.choices.selection_set(0)
@@ -336,7 +318,7 @@ class App(DebugFeatures):
             except ValueError:
                 return path
         try:
-            CONFIG.write_text(json.dumps({'compiler': portable(self.compiler), 'standard': self.standard.get(), 'gdb': portable(getattr(self, 'gdb_path', ''))}, ensure_ascii=False, indent=2), encoding='utf-8')
+            CONFIG.write_text(json.dumps({'compiler': portable(self.compiler), 'standard': self.standard.get(), 'gdb': portable(getattr(self, 'gdb_path', '')), 'font_size': self.font_size, 'always_on_top': bool(self.root.attributes('-topmost'))}, ensure_ascii=False, indent=2), encoding='utf-8')
         except OSError:
             pass
 

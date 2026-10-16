@@ -1,4 +1,5 @@
 """Local sample runner: compile once, execute each case in a fresh process."""
+from display_features import fit_window
 import difflib
 import json
 import os
@@ -89,8 +90,9 @@ class Samples:
         self.events = queue.Queue()
         self.window = tk.Toplevel(app.root)
         self.window.title('AlgoCpp · 多组样例测试')
-        self.window.geometry('1120x760')
-        self.window.minsize(900, 620)
+        self.window.transient(app.root)
+        self.window.attributes('-topmost', bool(app.root.attributes('-topmost')))
+        fit_window(self.window, 1400, 900)
         self.window.protocol('WM_DELETE_WINDOW', self.close)
         bar = ttk.Frame(self.window, padding=6)
         bar.pack(fill='x')
@@ -155,17 +157,19 @@ class Samples:
         frame = ttk.Frame(panes)
         panes.add(frame, weight=1)
         ttk.Label(frame, text=title).pack(anchor='w')
-        text = tk.Text(frame, font=('Consolas', 11), height=10, width=28, undo=True, wrap='none')
+        text = tk.Text(frame, font=self.app.io_font, height=10, width=28, undo=True, wrap='none')
+        self.app.bind_zoom(text)
         text.pack(fill='both', expand=True)
         return text
 
     def text_tab(self, notebook, title):
         frame = ttk.Frame(notebook)
         notebook.add(frame, text=title)
-        text = tk.Text(frame, font=('Consolas', 11), height=12, wrap='word', state='disabled')
+        text = tk.Text(frame, font=self.app.io_font, height=12, wrap='word', state='disabled')
         scroll = ttk.Scrollbar(frame, command=text.yview)
         scroll.pack(side='right', fill='y')
         text.configure(yscrollcommand=scroll.set)
+        self.app.bind_zoom(text)
         text.pack(fill='both', expand=True)
         return text
 
