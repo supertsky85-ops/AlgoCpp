@@ -19,18 +19,12 @@ class DebugFeatures:
         self.debug_generation = 0
         self.pause_revision = 0
         self.debug_events = queue.Queue()
-        self.breakpoints = set()
-        self.diagnostic_source = None
         self.gdb_path = self.config.get('gdb', '')
         if self.gdb_path and not Path(self.gdb_path).is_absolute():
             self.gdb_path = str(Path(__file__).resolve().parent / self.gdb_path)
         bundled_gdb = Path(__file__).resolve().parent / 'toolchain' / 'mingw64' / 'bin' / 'gdb.exe'
         if bundled_gdb.is_file():
             self.gdb_path = str(bundled_gdb)
-        self.editor.tag_configure('compile_error', background='#602c36')
-        self.editor.tag_configure('compile_warning', background='#4d4126')
-        self.editor.tag_configure('debug_line', background='#665523')
-        self.editor.tag_raise('sel')
         # A widget packed into a descendant still keeps its original Tk parent.
         # Recreate it under its tab so the notebook cannot cover its native window.
         self.output.destroy()
@@ -68,7 +62,6 @@ class DebugFeatures:
         self.wrap_toolbar(row)
         self.debug_status = tk.StringVar(value='调试就绪 · 点击行号设断点；黄色行表示下一条将执行的语句')
         ttk.Label(self.root, textvariable=self.debug_status, padding=(8, 2)).pack(side='bottom', fill='x')
-        self.numbers.bind('<Button-1>', self.gutter_breakpoint)
         self.root.bind('<F6>', lambda e: self.start_debug())
         self.root.bind('<F8>', lambda e: self.debug_command('-exec-continue'))
         self.root.bind('<F9>', lambda e: self.toggle_breakpoint())
@@ -81,7 +74,15 @@ class DebugFeatures:
         self.editor.tag_remove('compile_error', '1.0', 'end')
         self.editor.tag_remove('compile_warning', '1.0', 'end')
         self.diagnostics.delete(*self.diagnostics.get_children())
-        self.diagnostic_source = None
+        if self._doc:
+            self._doc.diagnostics = []
+            self._doc.diagnostic_source = None
+
+    def render_diagnostics(self):
+        """Show the active tab's diagnostics after switching documents."""
+        self.diagnostics.delete(*self.diagnostics.get_children())
+        for kind, location, message in self._doc.diagnostics:
+            self.diagnostics.insert('', 'end', values=(kind, location, message))
 
     def run_or_continue(self):
         if self.debug_state == 'paused':
@@ -96,7 +97,7 @@ class DebugFeatures:
         if source != self.editor.get('1.0', 'end-1c'):
             return
         self.reset_diagnostics()
-        self.diagnostic_source = source
+        records = []
         for line in text.splitlines():
             match = re.match(r'(.+?):(\d+):(\d+):\s*(fatal error|error|warning):\s*(.*)', line)
             if not match:
@@ -108,7 +109,10 @@ class DebugFeatures:
             row, col = int(row), int(col)
             tag = 'compile_warning' if kind == 'warning' else 'compile_error'
             self.editor.tag_add(tag, f'{row}.0', f'{row}.end+1c')
-            self.diagnostics.insert('', 'end', values=('警告' if kind == 'warning' else '错误', f'{row}:{col}', message))
+            records.append(('警告' if kind == 'warning' else '错误', f'{row}:{col}', message))
+        self._doc.diagnostics = records
+        self._doc.diagnostic_source = source
+        self.render_diagnostics()
         self.lines()
 
     def select_diagnostic(self, event=None):

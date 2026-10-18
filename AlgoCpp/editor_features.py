@@ -165,20 +165,28 @@ class EditorFeatures:
         self.bracket_status = StringVar()
         ttk.Label(self.root, textvariable=self.bracket_status, foreground='#b33a46',
                   padding=(8, 0)).pack(side='bottom', fill='x')
-        for n, color in enumerate(('#ffd166', '#80cbc4', '#b39ddb', '#82aaff', '#f6a6cf', '#b5db7b')):
-            self.editor.tag_configure(f'bracket_{n}', foreground=color)
-        self.editor.tag_configure('bracket_match', background='#365e78', foreground='#ffffff', underline=True)
-        self.editor.tag_configure('bracket_bad', background='#723442', foreground='#ffffff')
-        self.editor.tag_raise('sel')
-        self.editor.bind('<Shift-Tab>', self.unindent)
-        self.editor.bind('<Control-Shift-F>', self.format_code)
-        self.editor.bind('<Control-Shift-f>', self.format_code)
-        self.editor.bind('<ButtonPress-1>', self.selection_press)
-        self.editor.bind('<B1-Motion>', self.selection_motion)
-        self.editor.bind('<Control-z>', self.undo_edit)
-        self.editor.bind('<Control-y>', self.redo_edit)
-        self.editor.bind('<Control-Shift-Z>', self.redo_edit)
-        self.editor.bind('<Control-Shift-z>', self.redo_edit)
+
+    def bind_editor(self, editor):
+        """Attach the shared editing behaviour to one tab's text widget."""
+        editor.bind('<KeyPress>', self.key)
+        editor.bind('<KeyRelease>', self.changed)
+        editor.bind('<ButtonRelease-1>', self.selection_release)
+        editor.bind('<Control-space>', self.complete)
+        editor.bind('<Tab>', self.tab)
+        editor.bind('<Return>', self.enter)
+        editor.bind('<BackSpace>', self.backspace)
+        editor.bind('<Escape>', self.escape_editor)
+        editor.bind('<Down>', lambda e: self.popup_move(1))
+        editor.bind('<Up>', lambda e: self.popup_move(-1))
+        editor.bind('<Shift-Tab>', self.unindent)
+        editor.bind('<Control-Shift-F>', self.format_code)
+        editor.bind('<Control-Shift-f>', self.format_code)
+        editor.bind('<ButtonPress-1>', self.selection_press)
+        editor.bind('<B1-Motion>', self.selection_motion)
+        editor.bind('<Control-z>', self.undo_edit)
+        editor.bind('<Control-y>', self.redo_edit)
+        editor.bind('<Control-Shift-Z>', self.redo_edit)
+        editor.bind('<Control-Shift-z>', self.redo_edit)
 
     def offset(self, index='insert'):
         return len(self.editor.get('1.0', index))
@@ -434,8 +442,13 @@ class EditorFeatures:
         if not self.editable():
             return 'break'
         if self.popup:
-            self.accept()
-            return 'break'
+            # A member popup opened automatically right after "." must not
+            # swallow Enter: typing "mp." then Enter should start a new line.
+            if getattr(self, 'popup_auto_empty', False):
+                self.hide_popup()
+            else:
+                self.accept()
+                return 'break'
         selection = self.editor.tag_ranges('sel')
         if selection:
             self.editor.mark_set('insert', selection[0])

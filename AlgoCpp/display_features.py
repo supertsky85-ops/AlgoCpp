@@ -48,7 +48,8 @@ class DisplayFeatures:
         self.io_font = tkfont.Font(root=self.root, family='Consolas', size=max(9, self.font_size-2))
         self.small_font = tkfont.Font(root=self.root, family='Consolas', size=max(9, self.font_size-2))
         self.zoom_label = StringVar(value=f'{round(self.font_size/14*100)}%')
-        self.root.attributes('-topmost', bool(self.config.get('always_on_top', False)))
+        # Topmost is a per-session choice: every launch starts with it off.
+        self.root.attributes('-topmost', False)
         self.topmost_label = StringVar(value='窗口置顶：开' if self.root.attributes('-topmost') else '窗口置顶：关')
         self.root.bind('<Control-plus>', lambda e: self.zoom_font(1))
         self.root.bind('<Control-equal>', lambda e: self.zoom_font(1))
@@ -95,7 +96,8 @@ class DisplayFeatures:
 
     def update_gutter_width(self):
         self.gutter_width = max(53, self.small_font.measure('00000') + 20)
-        self.numbers.configure(width=self.gutter_width)
+        for doc in getattr(self, 'docs', ()):
+            doc.gutter.configure(width=self.gutter_width)
 
     def zoom_font(self, delta):
         self.font_size = max(9, min(32, self.font_size + delta))
@@ -117,3 +119,6 @@ class DisplayFeatures:
         samples = getattr(self, 'samples_window', None)
         if samples and samples.window.winfo_exists():
             samples.window.attributes('-topmost', enabled)
+        popup = getattr(self, 'popup', None)
+        if popup and popup.winfo_exists():
+            popup.attributes('-topmost', enabled)
